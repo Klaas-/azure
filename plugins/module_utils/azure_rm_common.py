@@ -134,6 +134,7 @@ AZURE_API_PROFILES = {
         'CosmosDBManagementClient': 'latest',
         'CdnManagementClient': '2017-04-02',
         'BatchManagementClient': 'latest',
+        'HybridComputeManagementClient': 'latest',
     },
     '2019-03-01-hybrid': {
         'StorageManagementClient': '2017-10-01',
@@ -293,6 +294,7 @@ try:
     from azure.mgmt.batch import models as BatchManagementModel
     from azure.mgmt.resourcehealth import ResourceHealthMgmtClient
     from azure.mgmt.cdn import CdnManagementClient
+    from azure.mgmt.hybridcompute import HybridComputeManagementClient
 
 except ImportError as exc:
     Authentication = object
@@ -481,6 +483,7 @@ class AzureRMModuleBase(object):
         self._batch_account_client = None
         self._resourcehealth_client = None
         self._cdn_client = None
+        self._hybrid_compute_management_client = None
 
         self.check_mode = self.module.check_mode
         self.api_profile = self.module.params.get('api_profile')
@@ -1582,6 +1585,14 @@ class AzureRMModuleBase(object):
                                                         base_url=self._cloud_environment.endpoints.resource_manager,
                                                         api_version='2024-02-01')
         return self._cdn_client
+
+    @property
+    def hybrid_compute_management_client(self):
+        self.log('Getting hybrid compute management client...')
+        if not self._hybrid_compute_management_client:
+            self._hybrid_compute_management_client = self.get_mgmt_svc_client(HybridComputeManagementClient,
+                                                                              base_url=self._cloud_environment.endpoints.resource_manager)
+        return self._hybrid_compute_management_client
 
 
 class AzureRMAuthException(Exception):
