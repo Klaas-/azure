@@ -31,12 +31,15 @@
         allocation_method: Static
         sku: standard
         name: "{{ pubipname }}"
+        zones:
+          - "1"
+          - "2"
 
     - name: Create a virtual network gateway
       azure.azcollection.azure_rm_virtualnetworkgateway:
         resource_group: "{{ resource_group }}-vnetgwnatrule"
         name: "{{ vngname }}"
-        sku: VpnGw2
+        sku: VpnGw2AZ
         vpn_gateway_generation: Generation2
         ip_configurations:
           - name: testipconfig

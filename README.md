@@ -16,10 +16,15 @@ Documentation of individual modules is [available at the Ansible Galaxy](https:/
 
 ## Installation
 
-Before using this collection, you need to install it with the Ansible Galaxy command-line tool:
+Before using this collection, you need to install/force-install it with the Ansible Galaxy command-line tool:
 
 ```
 ansible-galaxy collection install azure.azcollection
+```
+
+or force-install
+```
+ansible-galaxy collection install azure.azcollection --force
 ```
 
 You can also include it in a requirements.yml file and install it with `ansible-galaxy collection install -r requirements.yml`, using the format:
@@ -45,7 +50,7 @@ See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guid
 
 ---
 
-After the collection is installed, please install the dependencies required by the collection (adjust path to collection if necessary):
+After the collection is installed, please install the dependencies ([requirements.txt](https://github.com/ansible-collections/azure/blob/dev/requirements.txt)) required by the collection (adjust path to collection if necessary):
 
 ```bash
 pip install -r ~/.ansible/collections/ansible_collections/azure/azcollection/requirements.txt
@@ -114,13 +119,7 @@ There are many ways in which you can participate in the project, for example:
 
 ## Support
 
-* Join the Ansible forum:
-  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please use appropriate tags, for example `cloud`.
-  * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
-  * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events.
-* The Ansible [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn): used to announce releases and important changes.
-
-For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
+As Red Hat Ansible Certified Content, this collection is entitled to support through the Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, there may be community help available on the [Ansible Forum](https://forum.ansible.com/).
 
 ## Release Notes and Roadmap
 

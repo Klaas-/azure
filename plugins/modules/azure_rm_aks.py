@@ -200,6 +200,34 @@ options:
                             - Whether to disable or enabled the secure boot.
                         default: false
                         type: bool
+            scale_set_priority:
+                description:
+                    - Virtual Vachine Scale Set priority for the agent pool.
+                    - C(Regular) uses standard on-demand VMs.
+                    - C(Spot) uses Azure Spot VMs which can be evicted at any time.
+                    - This property is immutable after the agent pool is created.
+                type: str
+                choices:
+                    - Regular
+                    - Spot
+            scale_set_eviction_policy:
+                description:
+                    - Eviction policy for Spot VM agent pools.
+                    - Only applicable when I(scale_set_priority=Spot).
+                    - C(Delete) removes the VM and its disk on eviction.
+                    - C(Deallocate) deallocates the VM, but retains the disk on eviction.
+                    - This property is immutable after the agent pool is created.
+                type: str
+                choices:
+                    - Delete
+                    - Deallocate
+            spot_max_price:
+                description:
+                    - The maximum price (in USD per hour) for Spot VMs in the agent pool.
+                    - Use C(-1) to indicate the on-demand price.
+                    - Only applicable when I(scale_set_priority=Spot).
+                    - This property is immutable after the agent pool is created.
+                type: float
     security_profile:
         description:
             - Security profile for the container service cluster.
@@ -264,7 +292,7 @@ options:
                         description:
                             - Identifier of Azure Key Vault key.
                         type: str
-                    key_vault_network_acces:
+                    key_vault_network_access:
                         description:
                             - Network access of key vault.
                         type: str
@@ -275,8 +303,8 @@ options:
                     key_vault_resource_id:
                         description:
                             - Resource ID of key vault.
-                            - When I(key_vault_network_acces=Private), this field is required and must be a valid resource ID.
-                            - When I(key_vault_network_acces=Public), leave the field empty.
+                            - When I(key_vault_network_access=Private), this field is required and must be a valid resource ID.
+                            - When I(key_vault_network_access=Public), leave the field empty.
                         type: str
     service_principal:
         description:
@@ -329,10 +357,12 @@ options:
                     - With C(kubenet), nodes get an IP address from the Azure virtual network subnet.
                     - AKS features such as Virtual Nodes or network policies aren't supported with C(kubenet).
                     - C(azure) enables Azure Container Networking Interface(CNI), every pod gets an IP address from the subnet and can be accessed directly.
+                    - use BYO CNI for custom networking solutions.
                 type: str
                 choices:
                     - azure
                     - kubenet
+                    - none
             network_plugin_mode:
                 description:
                     - Network plugin mode used for building the Kubernetes network.
@@ -572,6 +602,30 @@ options:
                     - The Admin password for the cluster.
                 required: true
                 type: str
+            gmsa_profile:
+                description:
+                    - Windows Group Managed Service Accounts (gMSA).
+                type: dict
+                suboptions:
+                    enabled:
+                        description:
+                            - Whether to enable gMSA in the cluster.
+                        type: bool
+                        default: false
+                    dns_server:
+                        description:
+                            - Specifies the DNS server for Windows gMSA. Optional if you have
+                              configured the DNS server in the vnet which is used to create
+                              the managed cluster.
+                        required: false
+                        type: str
+                    root_domain_name:
+                        description:
+                            - Specifies the root domain name for Windows gMSA. Optional if you have
+                              configured the DNS server in the vnet which is used to create
+                              the managed cluster.
+                        required: false
+                        type: str
     disable_local_accounts:
         description:
             - If set to true, getting static credentials will be disabled for this cluster.
@@ -760,6 +814,8 @@ EXAMPLES = '''
     windows_profile:
       admin_username: azureuser
       admin_password: Password@0329
+      gmsa_profile:
+        enabled: true
     aad_profile:
       managed: true
     agent_pool_profiles:
@@ -786,12 +842,43 @@ EXAMPLES = '''
       network_plugin: azure
       outbound_type: loadBalancer
 
+- name: Create an AKS instance with a Spot user node pool
+  azure_rm_aks:
+    name: myAKSWithSpot
+    resource_group: myResourceGroup
+    location: eastus
+    dns_prefix: aksspot
+    kubernetes_version: 1.28.5
+    linux_profile:
+      admin_username: azureuser
+      ssh_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAA...
+    service_principal:
+      client_id: "cf72ca99-f6b9-4004-b0e0-bee10c521948"
+      client_secret: "Password1234!"
+    enable_rbac: true
+    agent_pool_profiles:
+      - name: systempool
+        count: 1
+        vm_size: Standard_B2s
+        mode: System
+      - name: spotpool
+        count: 2
+        vm_size: Standard_D2_v2
+        mode: User
+        scale_set_priority: Spot
+        scale_set_eviction_policy: Deallocate
+        spot_max_price: -1
+        enable_auto_scaling: true
+        min_count: 1
+        max_count: 5
+
 - name: Remove a managed Azure Container Services (AKS) instance
   azure_rm_aks:
     name: myAKS
     resource_group: myResourceGroup
     state: absent
 '''
+
 RETURN = '''
 state:
     description: Current state of the Azure Container Service (AKS).
@@ -999,7 +1086,8 @@ def create_windows_profile_dict(windowsprofile):
     if windowsprofile:
         return dict(
             admin_username=windowsprofile.admin_username,
-            admin_password=windowsprofile.admin_password
+            admin_password=windowsprofile.admin_password,
+            gmsa_profile=windowsprofile.gmsa_profile.as_dict() if windowsprofile.gmsa_profile else {},
         )
     else:
         return None
@@ -1016,6 +1104,9 @@ def create_agent_pool_profiles_dict(agentpoolprofiles):
         vm_size=profile.vm_size,
         name=profile.name,
         os_disk_size_gb=profile.os_disk_size_gb,
+        scale_set_priority=getattr(profile, 'scale_set_priority', None),
+        scale_set_eviction_policy=getattr(profile, 'scale_set_eviction_policy', None),
+        spot_max_price=getattr(profile, 'spot_max_price', None),
         vnet_subnet_id=profile.vnet_subnet_id,
         availability_zones=profile.availability_zones,
         os_type=profile.os_type,
@@ -1081,6 +1172,9 @@ agent_pool_profile_spec = dict(
     count=dict(type='int', required=True),
     vm_size=dict(type='str', required=True),
     os_disk_size_gb=dict(type='int'),
+    scale_set_priority=dict(type='str', choices=['Regular', 'Spot']),
+    scale_set_eviction_policy=dict(type='str', choices=['Delete', 'Deallocate']),
+    spot_max_price=dict(type='float'),
     dns_prefix=dict(type='str'),
     ports=dict(type='list', elements='int'),
     storage_profiles=dict(type='str', choices=[
@@ -1109,7 +1203,7 @@ agent_pool_profile_spec = dict(
 
 
 network_profile_spec = dict(
-    network_plugin=dict(type='str', choices=['azure', 'kubenet']),
+    network_plugin=dict(type='str', choices=['azure', 'kubenet', 'none']),
     network_plugin_mode=dict(type='str', choices=['Overlay']),
     network_policy=dict(type='str', choices=['azure', 'calico']),
     pod_cidr=dict(type='str'),
@@ -1146,6 +1240,14 @@ managed_identity_spec = dict(
 windows_profile_spec = dict(
     admin_username=dict(type='str', required=True),
     admin_password=dict(type='str', no_log=True, required=True),
+    gmsa_profile=dict(
+        type='dict',
+        options=dict(
+            enabled=dict(type='bool', default=False),
+            dns_server=dict(type='str', required=False),
+            root_domain_name=dict(type='str', required=False),
+        )
+    )
 )
 
 
@@ -1295,7 +1397,7 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                         options=dict(
                             enabled=dict(type='bool', default=False),
                             key_id=dict(type='str'),
-                            key_vault_network_acces=dict(type='str', choices=['Private', 'Public'], default='Public'),
+                            key_vault_network_access=dict(type='str', choices=['Private', 'Public'], default='Public'),
                             key_vault_resource_id=dict(type='str')
                         )
                     ),
@@ -1380,7 +1482,9 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                 if not self.service_principal and not self.identity:
                     self.identity = dotdict({'type': 'SystemAssigned'})
                 if self.identity:
-                    changed, self.identity = self.update_identity(self.identity, {})
+                    changed, new_identity_obj = self.update_identity(self.identity, {})
+                    if changed:
+                        self.identity_obj = new_identity_obj
                 if self.kubernetes_version not in available_versions.keys():
                     self.fail("Unsupported kubernetes version. Expected one of {0} but got {1}".format(available_versions.keys(), self.kubernetes_version))
             else:
@@ -1388,6 +1492,21 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                 self.results['changed'] = False
                 self.log('Results : {0}'.format(response))
                 update_tags, response['tags'] = self.update_tags(response['tags'])
+
+                if response and not self.service_principal and not self.identity:
+                    current_id = response.get('identity', {})
+                    if current_id.get('type') in ['UserAssigned', 'SystemAssigned']:
+                        # Preserve existing identity type
+                        self.identity = {'type': current_id['type']}
+                        # If user-assigned, include the existing identity resource ID
+                        if current_id['type'] == 'UserAssigned' and current_id.get('user_assigned_identities'):
+                            # current_id['user_assigned_identities'] is a dict of {ID: {}}
+                            uai_list = list(current_id['user_assigned_identities'].keys())
+                            if uai_list:
+                                self.identity['user_assigned_identities'] = uai_list[0]
+                    else:
+                        # Fallback to system-assigned if no identity at all
+                        self.identity = {'type': 'SystemAssigned'}
 
                 if response['provisioning_state'] == "Succeeded":
 
@@ -1475,6 +1594,15 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                             if not compare_addon(response['addon'].get(addon_name), self.addon.get(key), ADDONS[key].get('config')):
                                 to_be_updated = True
 
+                    if self.windows_profile:
+                        if not self.default_compare({},
+                                                    self.windows_profile.get('gmsa_profile'),
+                                                    response['windows_profile'].get('gmsa_profile'),
+                                                    '', dict(compare=[])):
+                            to_be_updated = True
+                        else:
+                            self.windows_profile['gmsa_profile'] = response['windows_profile']['gmsa_profile']
+
                     if not self.default_compare({}, self.security_profile, response['security_profile'], '', dict(compare=[])):
                         to_be_updated = True
                     else:
@@ -1484,6 +1612,14 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                         to_be_updated = True
                     else:
                         self.auto_upgrade_profile = response['auto_upgrade_profile']
+
+                    if self.aad_profile and 'admin_group_object_ids' in self.aad_profile and 'admin_group_object_i_ds' not in self.aad_profile:
+                        self.aad_profile['admin_group_object_i_ds'] = self.aad_profile.pop('admin_group_object_ids')
+
+                    if not self.default_compare({}, self.aad_profile, response['aad_profile'], '', dict(compare=[])):
+                        to_be_updated = True
+                    else:
+                        self.aad_profile = response['aad_profile']
 
                     for profile_result in response['agent_pool_profiles']:
                         matched = False
@@ -1548,6 +1684,13 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                                        bool(security_profile['enable_vtpm']) != bool(profile_result['security_profile']['enable_vtpm']):
                                         self.log(("Agent Profile Diff - Origin {0} / Update {1}".format(str(profile_result), str(profile_self))))
                                         to_be_updated = True
+                                # Preserve immutable VMSS settings if not explicitly provided
+                                if profile_self.get('scale_set_priority') is None and profile_result.get('scale_set_priority') is not None:
+                                    profile_self['scale_set_priority'] = profile_result.get('scale_set_priority')
+                                if profile_self.get('scale_set_eviction_policy') is None and profile_result.get('scale_set_eviction_policy') is not None:
+                                    profile_self['scale_set_eviction_policy'] = profile_result.get('scale_set_eviction_policy')
+                                if profile_self.get('spot_max_price') is None and profile_result.get('spot_max_price') is not None:
+                                    profile_self['spot_max_price'] = profile_result.get('spot_max_price')
 
                         if not matched:
                             self.log("Agent Pool not found")
@@ -1561,8 +1704,10 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                     if not self.service_principal and not self.identity:
                         self.identity = dotdict({'type': 'SystemAssigned'})
                     if self.identity:
-                        changed, self.identity = self.update_identity(self.identity, response['identity'])
+                        changed, new_identity_obj = self.update_identity(self.identity, response.get('identity', {}))
                         if changed:
+                            # Keep dict for internal checks, use object only for SDK call
+                            self.identity_obj = new_identity_obj
                             to_be_updated = True
                     # Cannot Update the Username for now // Let service to handle it
                     if self.windows_profile and is_property_changed('windows_profile', 'admin_username'):
@@ -1633,7 +1778,6 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
         # Only service_principal or identity can be specified, but default to SystemAssigned if none specified.
         if self.service_principal:
             service_principal_profile = self.create_service_principal_profile_instance(self.service_principal)
-            identity = None
         else:
             service_principal_profile = None
 
@@ -1669,6 +1813,34 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
         else:
             security_profile = None
 
+        identity_param = getattr(self, 'identity_obj', None)
+        if self.identity and identity_param is None:
+            identity_param = self.managedcluster_models.ManagedClusterIdentity(
+                type=self.identity['type'],
+                user_assigned_identities=({self.identity['user_assigned_identities']: {}}
+                                          if self.identity.get('user_assigned_identities')
+                                          else None))
+
+        if self.aad_profile:
+            # Fill tenant_id from the existing cluster if not provided
+            if not self.aad_profile.get('tenant_id'):
+                self.aad_profile['tenant_id'] = (self.results.get('aad_profile') or {}).get('tenant_id')
+
+            # Preserve managed flag if not provided
+            if 'managed' not in self.aad_profile:
+                current_managed = (self.results.get('aad_profile') or {}).get('managed')
+                if current_managed is not None:
+                    self.aad_profile['managed'] = current_managed
+
+            # Preserve enable_azure_rbac if not provided
+            if 'enable_azure_rbac' not in self.aad_profile:
+                current_rbac = (self.results.get('aad_profile') or {}).get('enable_azure_rbac')
+                if current_rbac is not None:
+                    self.aad_profile['enable_azure_rbac'] = current_rbac
+
+            if 'admin_group_object_ids' in self.aad_profile and 'admin_group_object_i_ds' not in self.aad_profile:
+                self.aad_profile['admin_group_object_i_ds'] = self.aad_profile.pop('admin_group_object_ids')
+
         parameters = self.managedcluster_models.ManagedCluster(
             location=self.location,
             dns_prefix=self.dns_prefix,
@@ -1678,7 +1850,7 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
             agent_pool_profiles=agentpools,
             linux_profile=linux_profile,
             windows_profile=windows_profile,
-            identity=self.identity,
+            identity=identity_param,
             enable_rbac=self.enable_rbac,
             network_profile=self.create_network_profile_instance(self.network_profile),
             aad_profile=self.create_aad_profile_instance(self.aad_profile),
@@ -1704,7 +1876,7 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
             return create_aks_dict(response)
         except Exception as exc:
             self.log('Error attempting to create the AKS instance.')
-            self.fail("Error creating the AKS instance: {0}".format(exc.message))
+            self.fail("Error creating the AKS instance: {0}".format(exc))
 
     def update_aks_tags(self):
         try:
@@ -1723,6 +1895,9 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
                     count=profile["count"],
                     vm_size=profile["vm_size"],
                     os_disk_size_gb=profile["os_disk_size_gb"],
+                    scale_set_priority=profile.get("scale_set_priority"),
+                    scale_set_eviction_policy=profile.get("scale_set_eviction_policy"),
+                    spot_max_price=profile.get("spot_max_price"),
                     max_count=profile["max_count"],
                     node_labels=profile["node_labels"],
                     min_count=profile["min_count"],
@@ -1845,9 +2020,14 @@ class AzureRMManagedCluster(AzureRMModuleBaseExt):
         :param: windowsprofile: dict with the parameters to setup the ManagedClusterWindowsProfile
         :return: ManagedClusterWindowsProfile
         '''
+        gmsa_profile = None
+        if windowsprofile.get('gmsa_profile'):
+            gmsa_profile = self.managedcluster_models.WindowsGmsaProfile(**windowsprofile.get('gmsa_profile'))
+
         return self.managedcluster_models.ManagedClusterWindowsProfile(
             admin_username=windowsprofile['admin_username'],
-            admin_password=windowsprofile['admin_password']
+            admin_password=windowsprofile['admin_password'],
+            gmsa_profile=gmsa_profile
         )
 
     def create_network_profile_instance(self, network):

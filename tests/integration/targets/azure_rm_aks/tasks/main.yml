@@ -14,7 +14,7 @@
       ansible.builtin.set_fact:
         rpfx: "{{ resource_group | hash('md5') | truncate(8, True, '') }}"
         noderpfx: "{{ resource_group | hash('md5') | truncate(4, True, '') }}"
-        location: westus2
+        location: eastus
 
     - name: Create User Managed Identity
       azure.azcollection.azure_rm_resource:
@@ -34,6 +34,9 @@
       ansible.builtin.set_fact:
         user_identity: "/subscriptions/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ansible-test-aks-identity"
         user_identity_2: "/subscriptions/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}-aks/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ansible-test-aks-identity-2"
+
+    - name: Include aks Windows tasks
+      ansible.builtin.include_tasks: windows-cluster.yml
 
     - name: Include aks tasks
       ansible.builtin.include_tasks: minimal-cluster.yml
@@ -60,7 +63,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             node_labels: {"release":"stable"}
@@ -101,7 +104,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             node_labels: {"release":"stable"}
@@ -119,6 +122,70 @@
         that:
           - output is changed
           - output.provisioning_state == 'Succeeded'
+
+    - name: Update AKS instance with AAD admin group
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}"
+        resource_group: "{{ resource_group }}-aks"
+        location: "{{ location }}"
+        dns_prefix: "aks{{ rpfx }}"
+        aad_profile:
+          managed: true
+          enable_azure_rbac: true
+          admin_group_object_ids:
+            - "11111111-2222-3333-4444-555555555555" # Dummy GUID
+        disable_local_accounts: true
+        kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
+        service_principal:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+        agent_pool_profiles:
+          - name: default
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: System
+        enable_rbac: true
+        network_profile:
+          load_balancer_sku: standard
+      register: aad_update
+
+    - name: Assert AAD admin group update applied
+      ansible.builtin.assert:
+        that:
+          - aad_update is changed
+
+    - name: Update AKS instance with AAD admin group (idempotent)
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}"
+        resource_group: "{{ resource_group }}-aks"
+        location: "{{ location }}"
+        dns_prefix: "aks{{ rpfx }}"
+        aad_profile:
+          managed: true
+          enable_azure_rbac: true
+          admin_group_object_ids:
+            - "11111111-2222-3333-4444-555555555555" # Dummy GUID
+        disable_local_accounts: true
+        kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
+        service_principal:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+        agent_pool_profiles:
+          - name: default
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: System
+        enable_rbac: true
+        network_profile:
+          load_balancer_sku: standard
+      register: aad_update_idem
+
+    - name: Assert idempotent
+      ansible.builtin.assert:
+        that:
+          - aad_update_idem is not changed
 
     - name: Get AKS fact
       azure.azcollection.azure_rm_aks_info:
@@ -152,7 +219,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             node_labels: {"release":"stable", "environment":"dev"}
@@ -211,7 +278,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             max_pods: 42
@@ -250,7 +317,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             max_pods: 42
@@ -294,7 +361,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             max_pods: 42
@@ -334,7 +401,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             enable_auto_scaling: true
@@ -375,7 +442,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             enable_auto_scaling: true
@@ -412,7 +479,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             enable_auto_scaling: true
@@ -423,7 +490,7 @@
               - 1
           - name: default2
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: User
         node_resource_group: "node{{ noderpfx }}"
@@ -460,7 +527,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             enable_auto_scaling: true
             max_count: 6
@@ -470,7 +537,7 @@
               - 1
           - name: default2
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: User
         node_resource_group: "node{{ noderpfx }}"
@@ -501,7 +568,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
             enable_auto_scaling: true
@@ -512,7 +579,7 @@
               - 1
           - name: default2
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
         node_resource_group: "node{{ noderpfx }}"
@@ -549,7 +616,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             enable_auto_scaling: true
             max_count: 6
@@ -559,7 +626,7 @@
               - 1
           - name: default2
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             type: VirtualMachineScaleSets
             mode: System
         node_resource_group: "node{{ noderpfx }}"
@@ -581,6 +648,110 @@
           - "fact.aks | length == 1"
           - fact.aks[0].kube_config == output.kube_config
 
+    - name: Create AKS with Spot agent pool
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}-spot"
+        resource_group: "{{ resource_group }}-aks"
+        location: "{{ location }}"
+        dns_prefix: "aks{{ rpfx }}-spot"
+        aad_profile:
+          managed: true
+          enable_azure_rbac: true
+        disable_local_accounts: true
+        kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
+        service_principal:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+        agent_pool_profiles:
+          - name: systempool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: System
+          - name: spotpool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: User
+            scale_set_priority: Spot
+            scale_set_eviction_policy: Delete
+            spot_max_price: -1
+        node_resource_group: "node{{ noderpfx }}-spot"
+        enable_rbac: true
+        network_profile:
+          load_balancer_sku: standard
+      register: spot_create
+
+    - name: Assert Spot AKS created
+      ansible.builtin.assert:
+        that:
+          - spot_create is changed
+          - spot_create.provisioning_state == 'Succeeded'
+
+    - name: Update AKS Spot pool WITHOUT specifying Spot fields
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}-spot"
+        resource_group: "{{ resource_group }}-aks"
+        location: "{{ location }}"
+        dns_prefix: "aks{{ rpfx }}-spot"
+        kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
+        service_principal:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+        enable_rbac: true
+        agent_pool_profiles:
+          - name: systempool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: System
+          - name: spotpool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: User
+            node_labels: {"environment":"test"}  # trigger update
+        network_profile:
+          load_balancer_sku: standard
+      register: spot_update
+
+    - name: Assert Spot pool update succeeded (no ScaleSetPriority immutable error)
+      ansible.builtin.assert:
+        that:
+          - spot_update is changed
+          - spot_update.provisioning_state == 'Succeeded'
+
+    - name: Update AKS Spot pool again (idempotent)
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}-spot"
+        resource_group: "{{ resource_group }}-aks"
+        location: "{{ location }}"
+        dns_prefix: "aks{{ rpfx }}-spot"
+        kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
+        service_principal:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+        enable_rbac: true
+        agent_pool_profiles:
+          - name: systempool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: System
+          - name: spotpool
+            count: 1
+            vm_size: Standard_D2s_v3
+            type: VirtualMachineScaleSets
+            mode: User
+        network_profile:
+          load_balancer_sku: standard
+      register: spot_update_idem
+
+    - name: Assert Spot pool update idempotent
+      ansible.builtin.assert:
+        that:
+          - spot_update_idem is not changed
+
     - name: Delete the AKS instance
       azure.azcollection.azure_rm_aks:
         name: "aks{{ rpfx }}"
@@ -592,6 +763,18 @@
       ansible.builtin.assert:
         that:
           - output is changed
+
+    - name: Delete the AKS Spot instance
+      azure.azcollection.azure_rm_aks:
+        name: "aks{{ rpfx }}-spot"
+        resource_group: "{{ resource_group }}-aks"
+        state: absent
+      register: output_spot_delete
+
+    - name: Assert the AKS Spot instance is well deleted
+      ansible.builtin.assert:
+        that:
+          - output_spot_delete is changed
 
     - name: Delete the AKS instance (idempotent)
       azure.azcollection.azure_rm_aks:

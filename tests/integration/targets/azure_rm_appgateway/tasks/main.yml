@@ -56,9 +56,6 @@
         address_prefixes_cidr:
           - 10.1.0.0/16
           - 172.100.0.0/16
-        dns_servers:
-          - 127.0.0.1
-          - 127.0.0.2
       register: vnet_output
     - name: Create a subnet
       azure.azcollection.azure_rm_subnet:
@@ -66,6 +63,9 @@
         virtual_network_name: vnet{{ rpfx }}
         resource_group: "{{ resource_group }}-appgateway"
         address_prefix_cidr: 10.1.0.0/24
+        delegations:
+          - name: appgw-delegation
+            serviceName: Microsoft.Network/applicationGateways
       register: subnet_output
 
     - name: Configure public IP for v2 gateway
@@ -232,6 +232,70 @@
       ansible.builtin.assert:
         that:
           - output is changed
+
+    - name: Gather full ID of the v2 AppGW Public IP (same RG)
+      azure.azcollection.azure_rm_publicipaddress_info:
+        name: "appgateway-v2-{{ rpfx }}-pip"
+        resource_group: "{{ resource_group }}-appgateway"
+      register: __pip_info
+
+    - name: Cache PIP identifiers for reference format tests
+      ansible.builtin.set_fact:
+        __pip_id: "{{ __pip_info.publicipaddresses.0.id }}"
+        __pip_name: "appgateway-v2-{{ rpfx }}-pip"
+        __pip_rg: "{{ resource_group }}-appgateway"
+
+    - name: Set frontend public IP using full resource ID (expect idempotent)
+      azure.azcollection.azure_rm_appgateway:
+        resource_group: "{{ resource_group }}-appgateway"
+        name: "appgateway-v2-{{ rpfx }}"
+        sku:
+          name: standard_v2
+          tier: standard_v2
+          capacity: 2
+        gateway_ip_configurations:
+          - subnet:
+              id: "{{ subnet_output.state.id }}"
+            name: app_gateway_ip_config
+        frontend_ip_configurations:
+          - name: "public-inbound-ip"
+            public_ip_address: "{{ __pip_id }}"        # FULL ID string
+        frontend_ports:
+          - name: "inbound-http"
+            port: 80
+          - name: "inbound-https"
+            port: 443
+      register: __variant1_apply
+    - name: Assert frontend public IP set via full resource ID is idempotent
+      ansible.builtin.assert:
+        that:
+          - __variant1_apply is not changed
+
+    - name: Set frontend public IP using bare name (expect idempotent)
+      azure.azcollection.azure_rm_appgateway:
+        resource_group: "{{ resource_group }}-appgateway"
+        name: "appgateway-v2-{{ rpfx }}"
+        sku:
+          name: standard_v2
+          tier: standard_v2
+          capacity: 2
+        gateway_ip_configurations:
+          - subnet:
+              id: "{{ subnet_output.state.id }}"
+            name: app_gateway_ip_config
+        frontend_ip_configurations:
+          - name: "public-inbound-ip"
+            public_ip_address: "{{ __pip_name }}"       # BARE NAME
+        frontend_ports:
+          - name: "inbound-http"
+            port: 80
+          - name: "inbound-https"
+            port: 443
+      register: __variant2_apply
+    - name: Assert bare name is idempotent
+      ansible.builtin.assert:
+        that:
+          - __variant2_apply is not changed
 
     - name: Try to create v2 instance of Application Gateway with rewrite rules - no update
       azure.azcollection.azure_rm_appgateway:
@@ -1048,12 +1112,10 @@
             url_path_maps:
               - "path_mappings"
       register: output
-
     - name: Assert the resource instance is well created
       ansible.builtin.assert:
         that:
           - output is changed
-
 
     - name: Try to create v2 instance of Application Gateway with autoscale configuration and trusted root certificates - no update
       azure.azcollection.azure_rm_appgateway:
@@ -1219,7 +1281,6 @@
             url_path_maps:
               - "path_mappings"
       register: output
-
     - name: Assert the resource instance is not updated
       ansible.builtin.assert:
         that:
@@ -1451,7 +1512,6 @@
           firewall_policy:
             name: "wafpolicy{{ rpfx }}"
       register: output
-
     - name: Assert the resource instance is well created
       ansible.builtin.assert:
         that:
@@ -1620,7 +1680,6 @@
           firewall_policy:
             name: "wafpolicy{{ rpfx }}"
       register: output
-
     - name: Assert the resource instance is not updated
       ansible.builtin.assert:
         that:
@@ -1789,7 +1848,6 @@
           firewall_policy:
             name: "wafpolicy{{ rpfx }}"
       register: output
-
     - name: Assert the resource instance is well created
       ansible.builtin.assert:
         that:
@@ -1951,7 +2009,6 @@
           firewall_policy:
             name: "wafpolicy{{ rpfx }}"
       register: output
-
     - name: Assert the resource instance is not updated
       ansible.builtin.assert:
         that:

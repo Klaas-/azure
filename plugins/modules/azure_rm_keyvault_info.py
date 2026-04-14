@@ -343,7 +343,7 @@ class AzureRMKeyVaultInfo(AzureRMModuleBase):
 
         self._client = self.get_mgmt_svc_client(KeyVaultManagementClient,
                                                 base_url=self._cloud_environment.endpoints.resource_manager,
-                                                api_version="2023-07-01")
+                                                api_version="2026-02-01")
 
         if self.name:
             if self.resource_group:
@@ -357,7 +357,7 @@ class AzureRMKeyVaultInfo(AzureRMModuleBase):
                 self.fail("resource_group is required when filtering by hsm_name")
         elif self.resource_group:
             self.results['keyvaults'] = self.list_vault_by_resource_group()
-            self.results['hsms'] = self.list_hsm_by_resource_group_hsm()
+            self.results['hsms'] = self.list_hsm_by_resource_group()
         else:
             self.results['keyvaults'] = self.list_vault()
             self.results['hsms'] = self.list_hsm()

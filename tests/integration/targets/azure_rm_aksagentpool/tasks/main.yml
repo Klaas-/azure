@@ -11,13 +11,13 @@
 
     - name: Find available k8s version
       azure.azcollection.azure_rm_aksversion_info:
-        location: westus2
+        location: eastus
       register: versions
 
     - name: Create proximity placement group
       azure.azcollection.azure_rm_proximityplacementgroup:
         resource_group: "{{ resource_group }}-akspool"
-        location: westus2
+        location: eastus
         name: "proxi{{ rpfx }}"
       register: proxi_output
 
@@ -25,7 +25,7 @@
       azure.azcollection.azure_rm_publicipprefix:
         resource_group: "{{ resource_group }}-akspool"
         name: "pipprefix{{ rpfx }}"
-        location: westus2
+        location: eastus
         zones:
           - 2
         public_ip_address_version: IPV4
@@ -38,7 +38,7 @@
     - name: Create a kubernet service with minimal parameters
       azure.azcollection.azure_rm_aks:
         name: "min{{ rpfx }}"
-        location: westus2
+        location: eastus
         resource_group: "{{ resource_group }}-akspool"
         kubernetes_version: "{{ versions.azure_aks_versions[0] }}"
         dns_prefix: "aks{{ rpfx }}"
@@ -49,7 +49,7 @@
         agent_pool_profiles:
           - name: default
             count: 1
-            vm_size: Standard_B2s
+            vm_size: Standard_D2s_v3
             mode: System
         api_server_access_profile:
           authorized_ip_ranges:
@@ -115,7 +115,7 @@
         cluster_name: "min{{ rpfx }}"
         name: default03
         count: 1
-        vm_size: Standard_B2s
+        vm_size: Standard_D2s_v3
         type_properties_type: VirtualMachineScaleSets
         mode: System
         node_labels: {"release":"stable"}
@@ -127,8 +127,8 @@
         security_profile:
           enable_vtpm: true
           enable_secure_boot: true
-        availability_zones:
-          - 1
+        # availability_zones:  <- OverconstrainedZonalAllocationRequest
+        #   - 3
       register: output
 
     - name: Assert the node agent pool created
@@ -142,7 +142,7 @@
         cluster_name: "min{{ rpfx }}"
         name: default03
         count: 1
-        vm_size: Standard_B2s
+        vm_size: Standard_D2s_v3
         type_properties_type: VirtualMachineScaleSets
         mode: System
         node_labels: {"release":"stable"}
@@ -154,8 +154,8 @@
         security_profile:
           enable_vtpm: true
           enable_secure_boot: true
-        availability_zones:
-          - 1
+        # availability_zones:  <- OverconstrainedZonalAllocationRequest
+        #   - 3
       register: output
 
     - name: Assert the node agent pool not changed
@@ -180,7 +180,7 @@
         cluster_name: "min{{ rpfx }}"
         name: default03
         count: 1
-        vm_size: Standard_B2s
+        vm_size: Standard_D2s_v3
         type_properties_type: VirtualMachineScaleSets
         mode: System
         node_labels: {"release":"stable"}
@@ -192,11 +192,11 @@
         security_profile:
           enable_vtpm: false
           enable_secure_boot: false
-        availability_zones:
-          - 1
+        # availability_zones:  <- OverconstrainedZonalAllocationRequest
+        #   - 3
       register: output
 
-    - name: Assert the node agent pool udpated
+    - name: Assert the node agent pool updated
       ansible.builtin.assert:
         that:
           - output is changed
@@ -211,7 +211,7 @@
     - name: Assert node agent configuration
       ansible.builtin.assert:
         that:
-          - output.aks_agent_pools[0].availability_zones == [1]
+          # - output.aks_agent_pools[0].availability_zones == [3]
           - output.aks_agent_pools[0].min_count == 2
           - output.aks_agent_pools[0].max_count == 20
           - output.aks_agent_pools[0].type_properties_type == "VirtualMachineScaleSets"
@@ -226,7 +226,7 @@
         cluster_name: "min{{ rpfx }}"
         name: default06
         count: 1
-        vm_size: Standard_B2s
+        vm_size: Standard_D2s_v3
         type_properties_type: VirtualMachineScaleSets
         mode: System
         node_labels: {"release":"stable"}
@@ -237,8 +237,8 @@
         min_count: 1
         max_count: 10
         orchestrator_version: "{{ agentpool_version.azure_orchestrator_version[0] }}"
-        availability_zones:
-          - 1
+        # availability_zones:  <- OverconstrainedZonalAllocationRequest
+        #   - 3
         kubelet_disk_type: OS
         workload_runtime: OCIContainer
         os_sku: Ubuntu
@@ -270,7 +270,7 @@
         cluster_name: "min{{ rpfx }}"
         name: default06
         count: 1
-        vm_size: Standard_B2s
+        vm_size: Standard_D2s_v3
         type_properties_type: VirtualMachineScaleSets
         mode: System
         node_labels: {"release":"stable"}
@@ -281,8 +281,8 @@
         min_count: 1
         max_count: 10
         orchestrator_version: "{{ agentpool_version.azure_orchestrator_version[0] }}"
-        availability_zones:
-          - 1
+        # availability_zones:  <- OverconstrainedZonalAllocationRequest
+        #   - 3
         kubelet_disk_type: OS
         workload_runtime: OCIContainer
         os_sku: Ubuntu

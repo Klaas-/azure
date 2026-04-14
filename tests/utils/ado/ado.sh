@@ -57,9 +57,9 @@ cd "${TEST_DIR}"
 mkdir -p shippable/testresults
 pip install  -I -r "${TEST_DIR}/requirements.txt"
 pip install  -I -r "${TEST_DIR}/sanity-requirements.txt"
-pip install ansible-lint==25.8.1
+pip install ansible-lint==26.1.1
 
-timeout=180
+timeout=360
 
 # See: https://docs.ansible.com/ansible/latest/dev_guide/testing/sanity/integration-aliases.html
 echo '--------------------------------------------'
@@ -107,7 +107,6 @@ RESOURCE_GROUP:${RESOURCE_GROUP}
 RESOURCE_GROUP_SECONDARY:${RESOURCE_GROUP_SECONDARY}
 AZURE_PRINCIPAL_ID:${AZURE_PRINCIPAL_ID}
 AZURE_MANAGED_BY_TENANT_ID:${AZURE_MANAGED_BY_TENANT_ID}
-AZURE_ROLE_DEFINITION_ID:${AZURE_ROLE_DEFINITION_ID}
 EOF
     ansible-test integration --color -v --retry-on-error "shippable/azure/group${GROUP_NO}/" --allow-destructive || { rm "$config_file"; die "failed to run integration test"; }
     rm "$config_file"

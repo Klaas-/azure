@@ -13,9 +13,11 @@ parameters:
     type: string
     default: "2.18"
     values:
-      - "2.16" # End Of Life May 2025 https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix
-      - "2.17"
+      # - "2.16" # End Of Life July 2025 https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix
+      # - "2.17" # End Of Life Nov 2025
       - "2.18"
+      - "2.19"
+      - "2.20"
       - "devel"
   - name: MODULE_NAME
     displayName: 'Test Module'
@@ -34,6 +36,8 @@ parameters:
       - "azure_rm_aks"
       - "azure_rm_aksagentpool"
       - "azure_rm_apimanagement"
+      - "azure_rm_appconfiguration"
+      - "azure_rm_appconfigurationkey"
       - "azure_rm_appgateway"
       - "azure_rm_appserviceplan"
       - "azure_rm_automationaccount"
@@ -59,6 +63,8 @@ parameters:
       - "azure_rm_dnszone"
       - "azure_rm_eventhub"
       - "azure_rm_expressroute"
+      - "azure_rm_eventgrid_subscription"
+      - "azure_rm_eventgrid_topic"
       - "azure_rm_firewallpolicy"
       - "azure_rm_functionapp"
       - "azure_rm_gallery"
@@ -77,6 +83,15 @@ parameters:
       - "azure_rm_manageddisk"
       - "azure_rm_managementgroup"
       - "azure_rm_mariadbserver"
+      - "azure_rm_ml_workspace"
+      - "azure_rm_ml_compute"
+      - "azure_rm_ml_data"
+      - "azure_rm_ml_datastore"
+      - "azure_rm_ml_component"
+      - "azure_rm_ml_environment"
+      - "azure_rm_ml_model"
+      - "azure_rm_ml_job"
+      - "azure_rm_ml_online_endpoint"
       - "azure_rm_monitoractiongroups"
       - "azure_rm_monitoractivitylogalerts"
       - "azure_rm_monitordatacollectionrules"
@@ -85,6 +100,7 @@ parameters:
       - "azure_rm_monitordiagnosticsetting"
       - "azure_rm_monitorlogprofile"
       - "azure_rm_monitormetricalerts"
+      - "azure_rm_monitorscheduledqueryrules"
       - "azure_rm_multiplemanageddisks"
       - "azure_rm_mysqlserver"
       - "azure_rm_mysqlflexibleserver"
@@ -122,6 +138,8 @@ parameters:
       - "azure_rm_storageblob"
       - "azure_rm_storageshare"
       - "azure_rm_subnet"
+      - "azure_rm_azure_rm_serviceendpointpolicy"
+      - "azure_rm_azure_rm_serviceendpointpolicydefinition"
       - "azure_rm_subscription"
       - "azure_rm_trafficmanagerprofile"
       - "azure_rm_virtualmachine"
@@ -205,7 +223,7 @@ jobs:
           group_no="all"
           case "${{ parameters.MODULE_NAME }}" in
             sanity)
-              gropu_no=sanity
+              group_no=sanity
               ;;
             inventory_azure)
               group_no=1
@@ -222,7 +240,7 @@ jobs:
 
   - job: RunTests
     dependsOn: InitializationTest
-    timeoutInMinutes: 180
+    timeoutInMinutes: 360
     variables:
       TEST_RESOURCE_GROUP: $[ dependencies.InitializationTest.outputs['setvar.resource_group'] ]
       TEST_RESOURCE_GROUP_SECONDARY: $[ dependencies.InitializationTest.outputs['setvar.resource_group_secondary'] ]
@@ -258,6 +276,14 @@ jobs:
           test.key: '14'
         "Python${{ parameters.PYTHON_VER }}_15":
           test.key: '15'
+        "Python${{ parameters.PYTHON_VER }}_16":
+          test.key: '16'
+        "Python${{ parameters.PYTHON_VER }}_17":
+          test.key: '17'
+        "Python${{ parameters.PYTHON_VER }}_18":
+          test.key: '18'
+        "Python${{ parameters.PYTHON_VER }}_19":
+          test.key: '19'
 
     steps:
       - task: UsePythonVersion@0
@@ -275,7 +301,6 @@ jobs:
           AZURE_TENANT: $(AZURE_TENANT)
           AZURE_PRINCIPAL_ID: $(AZURE_PRINCIPAL_ID)
           AZURE_MANAGED_BY_TENANT_ID: $(AZURE_MANAGED_BY_TENANT_ID)
-          AZURE_ROLE_DEFINITION_ID: $(AZURE_ROLE_DEFINITION_ID)
           RESOURCE_GROUP: $(TEST_RESOURCE_GROUP)
           RESOURCE_GROUP_SECONDARY: $(TEST_RESOURCE_GROUP_SECONDARY)
         displayName: 'Running Tests'
